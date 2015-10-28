@@ -55,7 +55,7 @@ public class Mapp implements Common {
 
     private void loadImage() {
     	// 床の画像を取得
-    	ImageIcon icon = new ImageIcon(getClass().getResource("map_c02-edit.gif"));
+    	ImageIcon icon = new ImageIcon(getClass().getResource("grassland.gif"));
     	floorImage = icon.getImage();
 
     	// 壁の画像を取得

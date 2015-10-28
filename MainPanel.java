@@ -45,7 +45,7 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
         map = new Mapp(this);
 
         // 勇者を生成
-        hero = new Chara(1, 1, "16cha03.gif", map);
+        hero = new Chara(1, 1, "Hero.gif", map);
 
         // ゲームループの生成と開始
         gameLoop = new Thread(this);

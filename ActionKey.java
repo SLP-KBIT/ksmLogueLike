@@ -6,7 +6,7 @@ public class ActionKey {
 	public static final int NORMAL = 0;
 	// キーが初めに押された時だけisPressed()はtrueを返す
 	// キーが押され続けても2回目以降はfalseを返す
-	// このモードを使うと会話スクロールボタンを押し続けても連続してスクロールしない
+	// このモードを使うと会話スクロールボタンを押し続けても連続してスクロールしない(detect:検出する)
 	public static final int DETECT_INITIAL_PRESS_ONLY = 1;
 
 	//--- キーの状態

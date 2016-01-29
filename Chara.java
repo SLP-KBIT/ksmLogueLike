@@ -6,16 +6,22 @@ import java.awt.Image;
 import javax.swing.ImageIcon;
 
 public class Chara implements Common {
+    // メンバ変数(フィールド)
 	// キャラの移動スピード
 	private static final int SPEED = 2;
 
-	// キャラのイメージ
-    private Image image;
+	// キャラの移動確率
+	public static final double PROB_MOVE = 0.02;
+
+	// キャラのイメージ(静的変数)
+    private static Image charaImage;    // staticがつくと、同じCharaクラスのインスタンス(hero、skeleton、lizard)で共通(共有)の変数となる
+
+    // キャラクター番号(インスタンス変数)
+    private int charaNo;    // staticがないフィールドは、同じCharaクラスでも、インスタンスごとに生成される(hero.charaNoとskeleton.charaNoは違う)
 
     // キャラの位置
     private int x, y;      // 単位：マス
     private int px, py;    // 単位：ピクセル
-
     // キャラの向いている方向(LEFT,RIGHT,UP,DOWNのどれか)
     private int direction;
     // キャラのアニメーションカウンタ
@@ -26,42 +32,55 @@ public class Chara implements Common {
     // 移動中の場合の移動ピクセル数
     private int movingLength;
 
+    // 移動タイプ
+    private int moveType;
+    // 話すメッセージ
+    private String message;
+
     // キャラクターアニメーション用スレッド
     private Thread threadAnime;
 
     // マップへの参照
     private Mapp map;
 
-    public Chara(int x, int y, String filename, Mapp map) {
+    public Chara(int x, int y, int charaNo, int direction, int moveType, Mapp map) {
     	this.x = x;
     	this.y = y;
 
     	px = x * CS;
     	py = y * CS;
 
-    	direction = DOWN;
+    	this.charaNo = charaNo;
+    	this.direction = direction;
     	count = 0;
-
+    	this.moveType = moveType;
     	this.map = map;
 
-    	// イメージをロード
-    	loadImage(filename);
+    	// 初回の呼び出しのみイメージをロード
+    	if ( charaImage == null ) {
+    	    loadImage();
+    	}
 
         // キャラクターアニメーション用スレッド開始
         threadAnime = new Thread(new AnimationThread());
         threadAnime.start();
     }
 
-    private void loadImage(String filename) {
-    	// キャラの画像を取得
-    	ImageIcon icon = new ImageIcon(getClass().getResource(filename));
-    	image = icon.getImage();
+    private void loadImage() {
+    	// キャラのイメージをロード
+    	ImageIcon icon = new ImageIcon(getClass().getResource("image/chara.gif"));
+    	charaImage = icon.getImage();
     }
 
-    public void drawChara(Graphics g, int offsetX, int offsetY) {
+    public void draw(Graphics g, int offsetX, int offsetY) {
+        int cx = ( charaNo % 8 ) * ( CS * 2 );
+        int cy = ( charaNo / 8 ) * ( CS * 4 );
     	// countとdirectionの値に応じて表示する画像を切り替える
-    	g.drawImage(image, px - offsetX, py - offsetY, px - offsetX + CS, py - offsetY + CS,
-    			count * CS, direction * CS, count * CS + CS, direction * CS + CS, null);
+    	g.drawImage(charaImage,
+    	    px - offsetX, py - offsetY,
+    	    px - offsetX + CS, py - offsetY + CS,
+    		cx + count * CS, cy + direction * CS,
+    		cx + count * CS + CS, cy + direction * CS + CS, null);
     }
 
     public boolean move() {
@@ -124,19 +143,19 @@ public class Chara implements Common {
     	int nextX = x + 1;
     	int nextY = y;
 
-    	if ( nextX > Mapp.COL - 1 ) { nextX = Mapp.COL - 1; }
+    	if ( nextX > map.getCol() - 1 ) { nextX = map.getCol() - 1; }
 
     	// 移動先に障害物がなければ移動開始
     	if ( map.isHit(nextX, nextY) == false ) {
     		// SPEEDピクセル分移動
     		px += SPEED;
-    		if ( px > Mapp.WIDTH - CS ) { px = Mapp.WIDTH - CS; }
+    		if ( px > map.getWidth() - CS ) { px = map.getWidth() - CS; }
     		// 移動距離を加算
     		movingLength += SPEED;
     		// 移動距離が1マス分を超えたら
     		if ( movingLength >= CS ) {
     			x++;
-    			if ( x > Mapp.COL - 1 ) { x = Mapp.COL - 1; }
+    			if ( x > map.getCol() - 1 ) { x = map.getCol() - 1; }
     			// 移動が完了
     			isMoving = false;
     			return true;
@@ -192,19 +211,19 @@ public class Chara implements Common {
     	int nextX = x;
     	int nextY = y + 1;
 
-    	if ( nextY > Mapp.ROW - 1 ) { nextY = Mapp.ROW - 1; }
+    	if ( nextY > map.getRow() - 1 ) { nextY = map.getRow() - 1; }
 
     	// 移動先に障害物がなければ移動開始
     	if ( map.isHit(nextX, nextY) == false ) {
     		// SPEEDピクセル分移動
     		py += SPEED;
-    		if ( py > Mapp.HEIGHT - CS ) { py = Mapp.HEIGHT - CS; }
+    		if ( py > map.getHeight() - CS ) { py = map.getHeight() - CS; }
     		// 移動距離を加算
     		movingLength += SPEED;
     		// 移動距離が1マス分を超えたら
     		if ( movingLength >= CS ) {
     			y++;
-    			if ( y > Mapp.ROW - 1 ) { y = Mapp.ROW - 1; }
+    			if ( y > map.getRow() - 1 ) { y = map.getRow() - 1; }
     			// 移動が完了
     			isMoving = false;
     			return true;
@@ -217,6 +236,59 @@ public class Chara implements Common {
     	}
 
     	return false;
+    }
+
+    //--- 勇者が向いている方向の隣にキャラクターがいるか調べる
+    // @return キャラクターがいたらそのCharaオブジェクトを返す
+    public Chara talkWith() {
+        int nextX = 0;
+        int nextY = 0;
+        // キャラクターの向いている方向の一歩隣の座標
+        switch ( direction ) {
+        case LEFT :
+            nextX = x - 1;
+            nextY = y;
+            break;
+        case RIGHT :
+            nextX = x + 1;
+            nextY = y;
+            break;
+        case UP :
+            nextX = x;
+            nextY = y - 1;
+            break;
+        case DOWN :
+            nextX = x;
+            nextY = y + 1;
+            break;
+        }
+        // その方向にキャラクターがいるか調べる
+        Chara chara = map.charaCheck(nextX, nextY);
+        // キャラクターがいれば話しかけた勇者の方に向ける
+        if ( chara != null ) {
+            switch ( direction ) {
+            case LEFT :
+                chara.setDirection(RIGHT);
+                break;
+            case RIGHT :
+                chara.setDirection(LEFT);
+                break;
+            case UP :
+                chara.setDirection(DOWN);
+                break;
+            case DOWN :
+                chara.setDirection(UP);
+                break;
+            }
+        }
+        return chara;
+    }
+
+    //--- 足元にアイテムがあるか調べる
+    // @return 足元にあるEventオブジェクト
+    public Event search() {
+        Event event = map.eventCheck(x, y);
+        return event;
     }
 
     public int getX() {
@@ -245,6 +317,21 @@ public class Chara implements Common {
     	movingLength = 0;
     }
 
+    // キャラクターのメッセージを取得する
+    public String getMessage() {
+        return message;
+    }
+
+    // キャラクターのメッセージを登録する
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    // キャラクターの移動タイプを取得する
+    public int getMoveType() {
+        return moveType;
+    }
+
     public class AnimationThread extends Thread {
     	public void run() {
     		while ( true ) {
@@ -257,7 +344,7 @@ public class Chara implements Common {
 
     			// AnimationThreadスレッドを300ミリ秒休止(300ミリ秒おきに勇者の画像を切り替える)
     			try {
-    				Thread.sleep(200);
+    				Thread.sleep(300);
     			} catch (InterruptedException e) {
     				e.printStackTrace();
     			}

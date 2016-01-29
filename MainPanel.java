@@ -2,8 +2,11 @@ package RPG;
 
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.Rectangle;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.util.Random;
+import java.util.Vector;
 
 import javax.swing.JPanel;
 
@@ -23,9 +26,18 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     private ActionKey rightKey;
     private ActionKey upKey;
     private ActionKey downKey;
+    private ActionKey spaceKey;
 
     // ゲームループスレッド
     private Thread gameLoop;
+
+    // 乱数生成器
+    private Random rand = new Random();
+
+    // ウィンドウ
+    private MessageWindow messageWindow;
+    // ウィンドウを表示する領域
+    private static Rectangle WND_RECT = new Rectangle(62, 324, 356, 140);
 
     public MainPanel() {
         // パネルの推奨サイズを設定
@@ -40,12 +52,20 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
         rightKey = new ActionKey();
         upKey = new ActionKey();
         downKey = new ActionKey();
+        spaceKey = new ActionKey(ActionKey.DETECT_INITIAL_PRESS_ONLY);
 
         // マップを生成
-        map = new Mapp(this);
+        map = new Mapp("map/map.dat", "event/event.dat", this);
 
         // 勇者を生成
-        hero = new Chara(1, 1, "Hero.gif", map);
+        hero = new Chara(1, 1, 0, DOWN, 0, map);
+
+        // マップにキャラクターを登録
+        // キャラクターはマップに属する
+        map.addChara(hero);
+
+        // ウィンドウを追加
+        messageWindow = new MessageWindow(WND_RECT);
 
         // ゲームループの生成と開始
         gameLoop = new Thread(this);
@@ -61,8 +81,8 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     	if ( offsetX < 0 ) {
     		offsetX = 0;    // マップの左端ではスクロールしないようにする
     	}
-    	if ( offsetX > Mapp.WIDTH - MainPanel.WIDTH ) {
-    		offsetX = Mapp.WIDTH - MainPanel.WIDTH;    // マップの右端ではスクロールしないようにする
+    	if ( offsetX > map.getWidth() - MainPanel.WIDTH ) {
+    		offsetX = map.getWidth() - MainPanel.WIDTH;    // マップの右端ではスクロールしないようにする
     	}
 
     	// Y方向のオフセット(距離)を計算
@@ -71,15 +91,16 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     	if ( offsetY < 0 ) {
     		offsetY = 0;    // マップの上端ではスクロールしないようにする
     	}
-    	if ( offsetY > Mapp.HEIGHT - MainPanel.HEIGHT ) {
-    		offsetY = Mapp.HEIGHT - MainPanel.HEIGHT;    // マップの下端ではスクロールしないようにする
+    	if ( offsetY > map.getHeight() - MainPanel.HEIGHT ) {
+    		offsetY = map.getHeight() - MainPanel.HEIGHT;    // マップの下端ではスクロールしないようにする
     	}
 
     	// マップを描く
-    	map.drawMap(g, offsetX, offsetY);
+    	// キャラクターはマップを描いてくれる(キャラクターはマップに属するため)
+    	map.draw(g, offsetX, offsetY);
 
-    	// 勇者を描く
-    	hero.drawChara(g, offsetX, offsetY);
+    	// メッセージウィンドウを描画
+    	messageWindow.draw(g);
     }
 
     // キーが押されたらキーの状態を「押された」に変える
@@ -100,6 +121,9 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     	case KeyEvent.VK_DOWN :
     		downKey.press();
     		break;
+        case KeyEvent.VK_SPACE :
+            spaceKey.press();
+            break;
     	}
     }
 
@@ -121,6 +145,9 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     	case KeyEvent.VK_DOWN :
     		downKey.release();
     		break;
+        case KeyEvent.VK_SPACE :
+            spaceKey.release();
+            break;
     	}
     }
 
@@ -131,13 +158,17 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     public void run() {
     	while ( true ) {
     		// キー入力をチェックする
-    		checkInput();
+    		if ( messageWindow.isVisible() == true ) {    // メッセージウィンドウ表示中なら
+    		    messageWindowCheckInput();
+    		} else {
+    		    mainWindowCheckInput();    // メイン画面のキー入力チェック
+    		}
 
-    		// 移動中なら移動する
-    		if ( hero.isMoving() == true ) {
-    			if ( hero.move() == true ) {    // 移動
-    				// 移動が完了した場合の処理をここに書く
-    			}
+    		if ( messageWindow.isVisible() == false ) {
+    		    // 勇者の移動処理
+    		    heroMove();
+    		    // 勇者以外のキャラクターの移動処理
+    		    charaMove();
     		}
 
     		// 再描画
@@ -152,7 +183,8 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     	}
     }
 
-    public void checkInput() {
+    // メインウィンドウでのキー入力をチェックする
+    public void mainWindowCheckInput() {
     	if ( leftKey.isPressed() == true ) {     // キーが押されている
     		if ( hero.isMoving() == false ) {    // 移動中でなければ
     			hero.setDirection(LEFT);         // 方向をセットして
@@ -177,5 +209,74 @@ public class MainPanel extends JPanel implements KeyListener, Runnable, Common {
     			hero.setMoving(true);
     		}
     	}
+        if ( spaceKey.isPressed() == true ) {
+            if ( hero.isMoving() == true ) { return; }    // 移動中は表示できない
+
+            // しらべる
+            Event item = hero.search();
+            if ( item != null ) {
+                // メッセージをセットする
+                messageWindow.setMessage(item.getItemName() + "　を　てにいれた。");
+                // メッセージウィンドウを表示
+                messageWindow.show();
+                // ここにアイテム入手処理を入れる
+
+                // 取得したアイテムを削除
+                map.removeEvent(item);
+                return;    // しらべた場合ははなさない
+            }
+
+            // はなす
+            if ( messageWindow.isVisible() == false ) {
+                Chara chara = hero.talkWith();
+                if ( chara != null ) {
+                    // メッセージをセットする
+                    messageWindow.setMessage(chara.getMessage());
+                } else {
+                    messageWindow.setMessage("そのほうこうには　だれもいない。");
+                }
+                messageWindow.show();    // メッセージウィンドウを表示
+            }
+        }
+    }
+
+    //--- メッセージウィンドウでのキー入力をチェックする
+    private void messageWindowCheckInput() {
+        if ( spaceKey.isPressed() == true ) {
+            if ( messageWindow.nextMessage() == true ) {    // 次のメッセージへ
+                messageWindow.hide();    // 終了したら隠す
+            }
+        }
+    }
+
+    //--- 勇者の移動処理
+    private void heroMove() {
+        // 移動中なら移動する
+        if ( hero.isMoving() == true ) {
+            if ( hero.move() == true ) {    // 移動する
+                // 移動が完了した場合の処理をここに書く
+            }
+        }
+    }
+
+    //--- 勇者以外のキャラクターの移動処理
+    private void charaMove() {
+        // マップにいるキャラクターを取得
+        Vector<Chara> charas = map.getCharas();
+        for ( int i = 0; i < charas.size(); i++ ) {
+            Chara chara = (Chara)charas.get(i);
+            // キャラクターの移動タイプを調べる
+            if ( chara.getMoveType() == 1 ) {    // 移動するタイプなら
+                if ( chara.isMoving() == true ) {    // 移動中なら
+                    chara.move();    // 移動する
+                } else if ( rand.nextDouble() < Chara.PROB_MOVE ) {
+                    // 移動していない場合はChara.PROB_MOVEの確率で移動する
+                    // 移動する方向はランダムに決める
+                    chara.setDirection(rand.nextInt(4));
+                    chara.setMoving(true);
+                }
+            }
+        }
+
     }
 }

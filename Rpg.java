@@ -8,7 +8,7 @@ public class Rpg extends JFrame {
 
     public Rpg() {
         // タイトルを設定
-        setTitle("スクロール処理2");
+        setTitle("さすらいのマイケル");
 
         // メインパネルを作成してフレームに追加
         MainPanel panel = new MainPanel();
